@@ -40,7 +40,8 @@ init_network <- function(df, blacklist =  "data/blacklist.csv",
   edges <- df %>% 
     clean_names() %>% 
     select(asset_transfer_transaction, sender) %>% 
-    unnest(cols = c(asset_transfer_transaction)) %>% 
+    unnest(cols = c(asset_transfer_transaction)) %>%
+    mutate(amount = amount/(10^decimal)) %>%
     rename(from = sender,
            to = receiver) %>% 
     filter(!(from %in% whitelist), !(to %in% whitelist)) %>%
@@ -76,18 +77,21 @@ init_network <- function(df, blacklist =  "data/blacklist.csv",
     mutate(degree = ifelse(is.na(degree), 0, degree))
   #only keep nodes w/ a certain minimum degree
   nodes <- nodes %>% filter(degree >= minimum_degree)
-  
   #add a font size column to the node df to hide labels
   nodes$font.size <- 0
   
-  return(list(nodes, edges))
+  #get an igraph g
+  edges_mat <- edges %>% select(from,to) %>% as.matrix()
+  g <- igraph::graph_from_edgelist(edges_mat, directed = FALSE)
+  
+  return(list(nodes, edges, g))
 } 
 
 #function to compute the degree of everything
 compute_degree <- function(nodes, edges) {
   #compute g and get the degree of every node
   edges <- edges %>% select(from, to) %>% as.matrix()
-  g <- igraph::graph_from_edgelist(edges)
+  g <- igraph::graph_from_edgelist(edges, directed = FALSE)
   degree <- igraph::degree(g)
   degree_df <- data.frame(id = names(degree), degree = degree)
   nodes <- left_join(nodes, degree_df)
@@ -148,17 +152,27 @@ create_network <- function(ASA_id = "432975976",
   return(out)
   
 }
+update_networks <- function(asa_index) {
+  for(i in 1:nrow(asa_index)) {
+    asa_i <- slice(asa_index, i)
+    out = create_network(ASA_id = asa_i$asa_id, minimum_degree = 1, minimum_tx = 10,
+                         min_holding= 0, force_update = TRUE,
+                         decimal = asa_i$decimal)
+  }
+}
 
-asa_index <- data.frame(asa_name = c("Commie Coin (USSR)", "AlgoMeow (MEOW)"), 
-                        asa_id = c(432975976, 361806984))
+asa_index <- data.frame(asa_name = c("Commie Coin (USSR)", "AlgoMeow (MEOW)", 
+                                     "Svansy Coin (SVANSY)", "MoonX (MOONX)", 
+                                     "Matrix (MTRX)"),
+                        asa_id = c(432975976, 361806984, 388502764, 404719435, 234994096), 
+                        decimal = c(3,0,6,5, 0))
+
+#update_networks(asa_index = asa_index)
 
 out = create_network()
-# out = create_network(minimum_degree = 1, minimum_tx = 10000,
-#                      min_holding= 0, force_update = TRUE)
-# out = create_network(ASA_id = "361806984", decimal = 0, force_update = TRUE,
-#                       minimum_tx = 50, min_holding = 0, minimum_degree = 1)
 nodes_init <- out[[1]]
 edges_init <- out[[2]]
+g_init <- out[[3]]
 
 
 

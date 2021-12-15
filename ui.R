@@ -19,7 +19,9 @@ ui <- shinyUI(fluidPage(
     column(
       width = 3,
       style='border-bottom: 1px solid black; height:60px',
-      tags$h3(em("Commie Coin (USSR)"))
+      tags$h3(em("Commie Coin"), tags$a(href="https://app.tinyman.org/#/swap?asset_in=0&asset_out=432975976", 
+                                        "($USSR)")), 
+      
     ),
     column( 
       width = 6, 
@@ -38,7 +40,9 @@ ui <- shinyUI(fluidPage(
            fluidRow(
              column(width = 10, offset = 1,
                     selectInput("asa_id", "ASA ID:", 
-                                c("Commie Coin (USSR)", "AlgoMeow (MEOW)"))
+                                c("Commie Coin (USSR)", "AlgoMeow (MEOW)", 
+                                  "Svansy Coin (SVANSY)", "MoonX (MOONX)", 
+                                  "Matrix (MTRX)"))
              )
            ),
            fluidRow(
@@ -50,6 +54,10 @@ ui <- shinyUI(fluidPage(
                     textOutput("blacklist_number"),
                     tags$h4("Suspicious Wallets:"),
                     textOutput("sus_number"),
+                    tags$br(),
+                    actionButton("add_sus", "Add Suspicious Wallets to Blacklist"),
+                    tags$br(),
+                    tags$br(),
                     downloadButton("download", "Download Current Blacklist")
              )
            )
