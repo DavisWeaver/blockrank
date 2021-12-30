@@ -43,7 +43,7 @@ shinyServer(function(input, output) {
     graph_data$sus_wallets = sum(graph_data$nodes$group == "suspicious")
     
     output$main_network <- renderVisNetwork({
-      visNetwork(graph_data$nodes, graph_data$edges) %>%
+      visNetwork(out[[1]], out[[2]]) %>%
         visEdges(smooth = FALSE) %>%
         visGroups(groupname = "blacklist", color = "black") %>%    # darkblue for group "A"
         visGroups(groupname = "suspicious", color = "red") %>%
@@ -73,8 +73,8 @@ shinyServer(function(input, output) {
       }
       graph_data$nodes = temp
       graph_data$nodes$group <- graph_data$nodes$label
-      visNetworkProxy("main_network") %>% 
-        visUpdateNodes(nodes = graph_data$nodes) 
+      visNetworkProxy("main_network") %>%
+        visUpdateNodes(nodes = graph_data$nodes)
       
       #update reactive values
       graph_data$scam_wallets = sum(graph_data$nodes$group == "blacklist") 
@@ -110,9 +110,9 @@ shinyServer(function(input, output) {
       mutate(label = ifelse(id %in% possible_blacklist, "suspicious", label),
              group = label)
     
-    visNetworkProxy("main_network") %>% 
+    visNetworkProxy("main_network") %>%
       visUpdateNodes(nodes = graph_data$nodes)
-    
+
     #update reactive values
     graph_data$scam_wallets = sum(graph_data$nodes$group == "blacklist") 
     graph_data$sus_wallets = sum(graph_data$nodes$group == "suspicious")
@@ -128,8 +128,5 @@ shinyServer(function(input, output) {
       write.csv(graph_data$current_blacklist, file)
     }
   )
-  
-  
-  
   
 })

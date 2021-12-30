@@ -5,9 +5,9 @@ account: kembaburner
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 5312244
-bundleId: 5376165
+bundleId: 5415200
 url: https://kembaburner.shinyapps.io/BlockRank/
-when: 1639582078.18027
-lastSyncTime: 1639582078.18027
+when: 1640717632.09535
+lastSyncTime: 1640717632.09535
 asMultiple: FALSE
 asStatic: FALSE

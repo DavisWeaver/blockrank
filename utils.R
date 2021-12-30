@@ -5,24 +5,107 @@ library(dplyr)
 library(janitor)
 library(tidyr)
 library(igraph)
+library(lubridate)
+library(foreach)
 
+#convenience function for generating a range of dates
+generate_daterange <- function() {
+  date_init <- lubridate::as_datetime(Sys.time() - 13000000)
+  date_stop <- lubridate::as_datetime(Sys.time())
+  date_range <- seq(date_init, date_stop, by = "2 days")
+  return(date_range)
+}
 
-get_all_tx <- function(ASA_id = "432975976") {
+#Main function to download all transactions for a given ASA
+get_all_tx <- function(ASA_id = "432975976", ncores = 1) {
   tmp <- tempfile()
-  curl_download(paste0('https://algoexplorerapi.io/idx2/v2/assets/', 
-                       ASA_id, '/transactions?currency-greater-than=10000'), tmp)
-  page <- read_json(tmp, simplifyVector = TRUE)
-  df_list <- list()
-  i = 1
-  df_list[[i]] <- page[[3]] #get the first one going
-  while(nrow(page[[3]]) == 1000) { #1000 is the max per page 
-    i <- i + 1
-    curl_download(paste0('https://algoexplorerapi.io/idx2/v2/assets/', 
-                         ASA_id, '/transactions?next=', page[[2]]), tmp)
+  
+  test <- try(curl_download(paste0('https://algoindexer.algoexplorerapi.io/v2/assets/', 
+                                   ASA_id, '/transactions'), tmp))
+  if(inherits(test, "try-error")) {
+    #try backup pipeline for large numbers of transactions ASAs
+    date_range <- generate_daterange()
+    cl <- parallel::makeCluster(ncores)
+    doParallel::registerDoParallel(cl)
+    out <- foreach(i = 1:length(date_range), 
+                   .packages = c("dplyr", "magrittr", "igraph", "tidyr",
+                                 "janitor", "jsonlite", "curl"), 
+                   .export = c( "generate_daterange"), 
+                   .errorhandling = "pass") %dopar% 
+      {
+        #don't run the last iteration of the loop
+        if(i == length(date_range)) {
+          return()
+        }
+        date_i <- format(date_range[i], "%Y-%m-%dT%H:%M:%SZ")
+        date_i1 <- format(date_range[i+1], "%Y-%m-%dT%H:%M:%SZ")
+        #format the download string
+        
+        download_string_i <- 
+          paste0('https://algoindexer.algoexplorerapi.io/v2/assets/', 
+                 ASA_id, '/transactions?after-time=', date_i,
+                 '&before-time=', date_i1)
+        #try the damn thing twice and no more
+        test <- try(curl_download(download_string_i, tmp))
+        if(inherits(test, "try-error")) {
+          curl_download(download_string_i, tmp)
+        }
+        page <- read_json(tmp, simplifyVector = TRUE)
+        #don't start the whole next thing until we find transactions
+        if(length(page) <3) {
+          return()
+        }
+        
+        page_df <- page[[3]] %>% 
+          clean_names() %>% 
+          select(asset_transfer_transaction, sender) %>% 
+          unnest(cols = c(asset_transfer_transaction))
+        df_list <- list()
+        j = 1
+        df_list[[j]] <- page_df #get the first one going
+        while(nrow(page[[3]]) == 1000) { #1000 is the max per page 
+          j <- j + 1
+          curl_download(paste0('https://algoindexer.algoexplorerapi.io/v2/assets/', 
+                               ASA_id, '/transactions?next=', page[[2]]), tmp)
+          
+          page <- read_json(tmp, simplifyVector = TRUE)
+          page_df <- page[[3]] %>% 
+            clean_names() %>% 
+            select(asset_transfer_transaction, sender) %>% 
+            unnest(cols = c(asset_transfer_transaction))
+          df_list[[j]] <- page_df
+        }
+        df_i <- bind_rows(df_list)
+        return(df_i)
+      }
+    out2 <- list()
+    for(i in 1:length(out)) {
+      if(is.data.frame(out[[i]])) {
+        out2[[i]] <- out[[i]]
+      }
+    }
+    df <- bind_rows(out2)
+    
+  } else {
     page <- read_json(tmp, simplifyVector = TRUE)
-    df_list[[i]] <- page[[3]]
+    df_list <- list()
+    i = 1
+    df_list[[i]] <- page[[3]] #get the first one going
+    while(nrow(page[[3]]) == 1000) { #1000 is the max per page 
+      i <- i + 1
+      test <- try(curl_download(paste0('https://algoindexer.algoexplorerapi.io/v2/assets/', 
+                                       ASA_id, '/transactions?next=', page[[2]]), tmp))
+      while(inherits(test, "try-error")) {
+        test <- try(curl_download(paste0('https://algoindexer.algoexplorerapi.io/v2/assets/', 
+                                         ASA_id, '/transactions?next=', page[[2]]), tmp))
+      }
+      
+      page <- read_json(tmp, simplifyVector = TRUE)
+      df_list[[i]] <- page[[3]]
+    }
+    df <- bind_rows(df_list) 
   }
-  df <- bind_rows(df_list)
+  
   return(df)
 }
 #df <- get_all_tx()
@@ -37,18 +120,33 @@ init_network <- function(df, blacklist =  "data/blacklist.csv",
   
   blacklist <- read.csv(blacklist)$Addresses
   whitelist <- read.csv(whitelist)$Addresses
-  edges <- df %>% 
-    clean_names() %>% 
-    select(asset_transfer_transaction, sender) %>% 
-    unnest(cols = c(asset_transfer_transaction)) %>%
-    mutate(amount = amount/(10^decimal)) %>%
-    rename(from = sender,
-           to = receiver) %>% 
-    filter(!(from %in% whitelist), !(to %in% whitelist)) %>%
-    group_by(from, to) %>% 
-    summarise(amount = sum(amount)) %>% 
-    filter(amount > minimum_tx) %>% 
-    mutate(width = log10(amount))
+  
+  #if we already did some of the cleaning in init_network
+  if(ncol(df) == 6) {
+    edges <- df %>%
+      mutate(amount = amount/(10^decimal)) %>%
+      rename(from = sender,
+             to = receiver) %>% 
+      filter(!(from %in% whitelist), !(to %in% whitelist)) %>%
+      group_by(from, to) %>% 
+      summarise(amount = sum(amount)) %>% 
+      filter(amount > minimum_tx) %>% 
+      mutate(width = log10(amount))
+  } else {
+    edges <- df %>% 
+      clean_names() %>% 
+      select(asset_transfer_transaction, sender) %>% 
+      unnest(cols = c(asset_transfer_transaction)) %>%
+      mutate(amount = amount/(10^decimal)) %>%
+      rename(from = sender,
+             to = receiver) %>% 
+      filter(!(from %in% whitelist), !(to %in% whitelist)) %>%
+      group_by(from, to) %>% 
+      summarise(amount = sum(amount)) %>% 
+      filter(amount > minimum_tx) %>% 
+      mutate(width = log10(amount))
+  }
+  
   
   #create a possible blacklist based on nodes that transact with the actual blacklist
   possible_blacklist <- edges %>% 
@@ -75,6 +173,9 @@ init_network <- function(df, blacklist =  "data/blacklist.csv",
   #add some key variables
   nodes <- compute_degree(nodes, edges) %>% 
     mutate(degree = ifelse(is.na(degree), 0, degree))
+  
+  #want to compute the algo edges/ node info here as well.
+  
   #only keep nodes w/ a certain minimum degree
   nodes <- nodes %>% filter(degree >= minimum_degree)
   #add a font size column to the node df to hide labels
@@ -83,7 +184,6 @@ init_network <- function(df, blacklist =  "data/blacklist.csv",
   #get an igraph g
   edges_mat <- edges %>% select(from,to) %>% as.matrix()
   g <- igraph::graph_from_edgelist(edges_mat, directed = FALSE)
-  
   return(list(nodes, edges, g))
 } 
 
@@ -98,10 +198,15 @@ compute_degree <- function(nodes, edges) {
   return(nodes)
 }
 
+compute_algo_edges <- function(nodes, edges) {
+  
+}
+
 compute_holdings <- function(ASA_id, min_holding = 10000, decimal = 3) {
   tmp <- tempfile()
-  curl_download(paste0('https://algoexplorerapi.io/idx2/v2/assets/', 
-                       ASA_id, '/balances?'), tmp)
+  
+  test <- try(curl_download(paste0('https://algoindexer.algoexplorerapi.io/v2/assets/', 
+                                   ASA_id, '/balances?'), tmp))
   page <- read_json(tmp, simplifyVector = TRUE)
   
   df_list <- list()
@@ -109,12 +214,18 @@ compute_holdings <- function(ASA_id, min_holding = 10000, decimal = 3) {
   i = 1
   while(nrow(page[[1]]) == 1000) { #1000 is the max per page 
     i <- i + 1
-    curl_download(paste0('https://algoexplorerapi.io/idx2/v2/assets/', 
-                         ASA_id, '/balances?next=', page[[3]]), tmp)
+    test <- try(curl_download(paste0('https://algoindexer.algoexplorerapi.io/v2/assets/', 
+                                     ASA_id, '/balances?next=', page[[3]]), tmp))
+    while(inherits(test, "try-error")) {
+      test <- try(curl_download(paste0('https://algoindexer.algoexplorerapi.io/v2/assets/', 
+                                       ASA_id, '/balances?next=', page[[3]]), tmp))
+    }
     page <- read_json(tmp, simplifyVector = TRUE)
     df_list[[i]] <- page[[1]]
   }
   balances <- bind_rows(df_list)
+  
+  
   
   balances$amount <- balances$amount/(10^decimal)
   balances <- balances %>% filter(amount > min_holding) %>% 
@@ -130,7 +241,7 @@ create_network <- function(ASA_id = "432975976",
                            min_holding = 100000,
                            blacklist =  "data/blacklist.csv", 
                            minimum_tx = 10000000, 
-                           minimum_degree = 2,
+                           minimum_degree = 1,
                            force_update = FALSE) {
   
   if(file.exists(paste0("data/", ASA_id, "_network.Rda")) & !force_update) {
@@ -141,7 +252,7 @@ create_network <- function(ASA_id = "432975976",
   #define whitelist based on ASA_id
   whitelist <- paste0("data/", ASA_id, "_whitelist.csv")
   
-  df <- get_all_tx(ASA_id = ASA_id)
+  df <- get_all_tx(ASA_id = ASA_id, ncores = ncores)
   out <- init_network(df = df, blacklist = blacklist, whitelist = whitelist,
                       minimum_tx = minimum_tx, min_holding = min_holding, 
                       decimal = decimal, 
@@ -152,22 +263,17 @@ create_network <- function(ASA_id = "432975976",
   return(out)
   
 }
-update_networks <- function(asa_index) {
-  for(i in 1:nrow(asa_index)) {
-    asa_i <- slice(asa_index, i)
-    out = create_network(ASA_id = asa_i$asa_id, minimum_degree = 1, minimum_tx = 10,
-                         min_holding= 0, force_update = TRUE,
-                         decimal = asa_i$decimal)
-  }
-}
 
-asa_index <- data.frame(asa_name = c("Commie Coin (USSR)", "AlgoMeow (MEOW)", 
-                                     "Svansy Coin (SVANSY)", "MoonX (MOONX)", 
-                                     "Matrix (MTRX)"),
-                        asa_id = c(432975976, 361806984, 388502764, 404719435, 234994096), 
-                        decimal = c(3,0,6,5, 0))
+asa_index <- data.frame(asa_name = c("Commie Coin (USSR)","BirdBot (BIRDS)",
+                                     "Akita Inu (AKITA)",
+                                     "AlgoMeow (MEOW)",
+                                     "Svansy Coin (SVANSY)", "MoonX (MOONX)",
+                                     "Matrix (MTRX)", 
+                                     "CryptoRulesEverythingAroundMe (CREAM)"),
+                        asa_id = c(432975976, 478549868, 384303832, 361806984, 
+                                   388502764, 404719435, 234994096, 312412702),
+                        decimal = c(3,0, 0, 0, 6,5, 0, 6))
 
-#update_networks(asa_index = asa_index)
 
 out = create_network()
 nodes_init <- out[[1]]
