@@ -40,7 +40,7 @@ ui <- shinyUI(
     ),
     
     fluidRow(
-      column(width = 4, style='border-right: 1px solid black',
+      column(width = 3, style='border-right: 1px solid black',
              fluidRow(
                column(width = 10, offset = 1,
                       selectInput("asa_id", "ASA ID:", 
@@ -71,7 +71,7 @@ ui <- shinyUI(
              )
       ),
       # which node did we delete? just to remind people 
-      column(width = 8, 
+      column(width = 9, 
              
              fluidRow(
                #draw the visnetwork

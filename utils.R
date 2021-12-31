@@ -370,7 +370,11 @@ asa_index <- data.frame(asa_name = c("Commie Coin (USSR)","BirdBot (BIRDS)",
 
 out = create_network()
 nodes_init <- out[[1]]
-edges_init <- out[[2]]
+edges_init <- out[[2]] 
+ledges <- data.frame(color = c("red", "black"),
+                               label = c("ASA", "Algo"), arrows =c("to"), 
+                     font.size = c(16), 
+                     width = 4, length = 10)
 g_init <- out[[3]]
 
 

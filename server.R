@@ -36,12 +36,14 @@ shinyServer(function(input, output) {
     
     #update all the reactive values
     graph_data$nodes = out[[1]]
-    graph_data$edges = out[[2]]
+    graph_data$edges = out[[2]] 
     graph_data$g = out[[3]]
     graph_data$wallet_number = nrow(graph_data$nodes)
     graph_data$scam_wallets = sum(graph_data$nodes$group == "blacklist") 
     graph_data$sus_wallets = sum(graph_data$nodes$group == "suspicious")
     
+    #need a version of edges that isn't reactive
+
     output$main_network <- renderVisNetwork({
       visNetwork(out[[1]], out[[2]]) %>%
         visEdges(smooth = FALSE,
@@ -50,7 +52,9 @@ shinyServer(function(input, output) {
         visGroups(groupname = "suspicious", color = "red") %>%
         visGroups(groupname = "clean", color = "blue") %>%
         visOptions(selectedBy = "group", 
-                   manipulation = TRUE)
+                   manipulation = TRUE) %>% 
+        visLegend(width = 0.15, position = "right", 
+                  addEdges = ledges, useGroups = FALSE)
     })
     
     visNetworkProxy("main_network") %>%
@@ -123,7 +127,7 @@ shinyServer(function(input, output) {
   
   output$download <- downloadHandler(
     filename = function () {
-      paste0("current_blacklist_", Sys.Date(), ".csv")
+      paste0("current_blacklist_", Sys.Date(), ".ecsv")
     },
     content = function(file) {
       write.csv(graph_data$current_blacklist, file)
