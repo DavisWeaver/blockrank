@@ -44,7 +44,8 @@ shinyServer(function(input, output) {
     
     output$main_network <- renderVisNetwork({
       visNetwork(out[[1]], out[[2]]) %>%
-        visEdges(smooth = FALSE) %>%
+        visEdges(smooth = FALSE,
+                 arrows = list(to = list(enabled = TRUE, scaleFactor = 1))) %>%
         visGroups(groupname = "blacklist", color = "black") %>%    # darkblue for group "A"
         visGroups(groupname = "suspicious", color = "red") %>%
         visGroups(groupname = "clean", color = "blue") %>%

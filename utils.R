@@ -58,7 +58,7 @@ get_all_tx <- function(ASA_id = "432975976", ncores = 1) {
         
         page_df <- page[[3]] %>% 
           clean_names() %>% 
-          select(asset_transfer_transaction, sender) %>% 
+          select(asset_transfer_transaction, sender, confirmed_round) %>% 
           unnest(cols = c(asset_transfer_transaction))
         df_list <- list()
         j = 1
@@ -71,7 +71,7 @@ get_all_tx <- function(ASA_id = "432975976", ncores = 1) {
           page <- read_json(tmp, simplifyVector = TRUE)
           page_df <- page[[3]] %>% 
             clean_names() %>% 
-            select(asset_transfer_transaction, sender) %>% 
+            select(asset_transfer_transaction, sender, confirmed_round) %>% 
             unnest(cols = c(asset_transfer_transaction))
           df_list[[j]] <- page_df
         }
@@ -116,35 +116,39 @@ init_network <- function(df, blacklist =  "data/blacklist.csv",
                          minimum_tx = 10000000, 
                          min_holding,
                          decimal, 
-                         minimum_degree, ASA_id) {
+                         minimum_degree, ASA_id, ncores = 1) {
   
   blacklist <- read.csv(blacklist)$Addresses
   whitelist <- read.csv(whitelist)$Addresses
   
   #if we already did some of the cleaning in init_network
-  if(ncol(df) == 6) {
+  if(ncol(df) == 7) {
     edges <- df %>%
       mutate(amount = amount/(10^decimal)) %>%
       rename(from = sender,
              to = receiver) %>% 
       filter(!(from %in% whitelist), !(to %in% whitelist)) %>%
       group_by(from, to) %>% 
-      summarise(amount = sum(amount)) %>% 
+      summarise(amount = sum(amount), 
+                confirmed_round = max(confirmed_round)) %>% 
       filter(amount > minimum_tx) %>% 
-      mutate(width = log10(amount))
+      mutate(color = "red")
+    edges$value <- scale(edges$amount)[1:nrow(edges)]
   } else {
     edges <- df %>% 
       clean_names() %>% 
-      select(asset_transfer_transaction, sender) %>% 
+      select(asset_transfer_transaction, sender, confirmed_round) %>% 
       unnest(cols = c(asset_transfer_transaction)) %>%
       mutate(amount = amount/(10^decimal)) %>%
       rename(from = sender,
              to = receiver) %>% 
       filter(!(from %in% whitelist), !(to %in% whitelist)) %>%
       group_by(from, to) %>% 
-      summarise(amount = sum(amount)) %>% 
+      summarise(amount = sum(amount),
+                confirmed_round = max(confirmed_round)) %>% 
       filter(amount > minimum_tx) %>% 
-      mutate(width = log10(amount))
+      mutate(color = "red")
+    edges$value <- scale(edges$amount)[1:nrow(edges)]
   }
   
   
@@ -170,6 +174,10 @@ init_network <- function(df, blacklist =  "data/blacklist.csv",
            label = group) %>% 
     filter(!(id %in% whitelist))
   edges <- edges %>% filter(from %in% nodes$id & to %in% nodes$id)
+  
+  
+  #compute the algo edges --> this takes a minute
+  edges <- compute_algo_edges(nodes = nodes, edges = edges, ncores = ncores, whitelist = whitelist)
   #add some key variables
   nodes <- compute_degree(nodes, edges) %>% 
     mutate(degree = ifelse(is.na(degree), 0, degree))
@@ -198,7 +206,91 @@ compute_degree <- function(nodes, edges) {
   return(nodes)
 }
 
-compute_algo_edges <- function(nodes, edges) {
+#Function to compute the edges for algo transactions
+compute_algo_edges <- function(nodes, edges, whitelist, ncores) {
+  
+  #initialize tempfile for downloads
+  tmp <- tempfile()
+  
+  #Setup to loop through every wallet, grabbing algo transactions
+  out_list <- list()
+  ids <- nodes$id
+  
+  #setup cluster
+  cl <- parallel::makeCluster(ncores)
+  doParallel::registerDoParallel(cl)
+  out <- foreach(i = 1:length(ids), 
+                 .packages = c("dplyr", "magrittr", "igraph", "tidyr",
+                               "janitor", "jsonlite", "curl"), 
+                 .errorhandling = "pass") %dopar% 
+    {
+      curl_download(
+        paste0('https://algoindexer.algoexplorerapi.io/v2/accounts/', ids[i], 
+               '/transactions?tx-type=pay&currency-greater-than=1000000'), tmp
+      )
+      
+      #Get the first page of results
+      page <- read_json(tmp, simplifyVector = TRUE)
+      if(length(page) < 3) {
+        return()
+      }
+      page_df <- page[[3]] %>% 
+        clean_names() %>% 
+        unnest(cols = c(payment_transaction)) %>%
+        select(sender, receiver, amount, id) 
+      
+      
+      #If there is a next token we need to go retrieve the other pages of results
+      df_list <- list()
+      j = 1
+      df_list[[j]] <- page_df #get the first one going
+      while(nrow(page_df) == 1000) { #1000 is the max per page 
+        j <- j + 1
+        curl_download(
+          paste0('https://algoindexer.algoexplorerapi.io/v2/accounts/', ids[i], 
+                 '/transactions?next=', page[[2]], '&tx-type=pay&currency-greater-than=1000000'), tmp
+        )
+        
+        #download the next page and so on and so on
+        page <- read_json(tmp, simplifyVector = TRUE)
+        page_df <- page[[3]] %>% 
+          clean_names() %>% 
+          unnest(cols = c(payment_transaction)) %>%
+          select(sender, receiver, amount, id)
+        df_list[[j]] <- page_df
+      }
+      #bind all the pages of results together and filter out transactions involving whitelisted wallets
+      #also filter out all transactions where to and from aren't in ids
+      df_i <- bind_rows(df_list) %>% filter(!(sender %in% whitelist), 
+                                            !(receiver %in% whitelist), 
+                                            sender %in% ids & receiver %in% ids)
+      
+      
+      return(df_i)
+    }
+  
+  
+  #process the gross output
+  out2 <- list()
+  for(i in 1:length(out)) {
+    if(is.data.frame(out[[i]])) {
+      out2[[i]] <- out[[i]]
+    }
+  }
+  
+  #finish cleaning + prepping to graph
+  df <- bind_rows(out2) %>% 
+    distinct(id, .keep_all = TRUE) %>%
+    rename(from = "sender",
+           to = "receiver") %>% 
+    group_by(from, to) %>% 
+    summarise(amount = sum(amount)/(10^6)) %>%
+    mutate(color = "black")
+  
+  df$value <- scale(df$amount)[1:nrow(df)]
+  
+  edges <- bind_rows(edges, df)
+  return(edges)
   
 }
 
@@ -242,7 +334,8 @@ create_network <- function(ASA_id = "432975976",
                            blacklist =  "data/blacklist.csv", 
                            minimum_tx = 10000000, 
                            minimum_degree = 1,
-                           force_update = FALSE) {
+                           force_update = FALSE, 
+                           ncores = 1) {
   
   if(file.exists(paste0("data/", ASA_id, "_network.Rda")) & !force_update) {
     load(paste0("data/", ASA_id, "_network.Rda"))
@@ -256,7 +349,7 @@ create_network <- function(ASA_id = "432975976",
   out <- init_network(df = df, blacklist = blacklist, whitelist = whitelist,
                       minimum_tx = minimum_tx, min_holding = min_holding, 
                       decimal = decimal, 
-                      minimum_degree = minimum_degree, ASA_id = ASA_id)
+                      minimum_degree = minimum_degree, ASA_id = ASA_id, ncores = ncores)
   
   save(out, file = paste0("data/", ASA_id, "_network.Rda"))
   
