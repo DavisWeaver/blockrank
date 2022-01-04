@@ -126,13 +126,12 @@ init_network <- function(df, blacklist =  "data/blacklist.csv",
     edges <- df %>%
       mutate(amount = amount/(10^decimal)) %>%
       rename(from = sender,
-             to = receiver) %>% 
-      filter(!(from %in% whitelist), !(to %in% whitelist)) %>%
+             to = receiver) %>%
       group_by(from, to) %>% 
       summarise(amount = sum(amount), 
                 confirmed_round = max(confirmed_round)) %>% 
       filter(amount > minimum_tx) %>% 
-      mutate(color = "red")
+      mutate(ASA_id = ASA_id)
     edges$value <- scale(edges$amount)[1:nrow(edges)]
   } else {
     edges <- df %>% 
@@ -141,8 +140,7 @@ init_network <- function(df, blacklist =  "data/blacklist.csv",
       unnest(cols = c(asset_transfer_transaction)) %>%
       mutate(amount = amount/(10^decimal)) %>%
       rename(from = sender,
-             to = receiver) %>% 
-      filter(!(from %in% whitelist), !(to %in% whitelist)) %>%
+             to = receiver) %>%
       group_by(from, to) %>% 
       summarise(amount = sum(amount),
                 confirmed_round = max(confirmed_round)) %>% 
@@ -325,6 +323,12 @@ compute_holdings <- function(ASA_id, min_holding = 10000, decimal = 3) {
   
   nodes <- balances %>% mutate(value = amount)
   return(nodes)
+}
+
+filter_network <- function(nodes, edges, ASA_id, whitelist, blacklist, min_holding, 
+                           minimum_tx, minimum_degree) {
+  nodes <- nodes %>% 
+    filter(!(from %in% whitelist), !(to %in% whitelist))
 }
 
 #Main Function that checks it and also the cache
