@@ -7,6 +7,7 @@ library(janitor)
 library(tidyr)
 library(igraph)
 source("utils.R")
+
 update_networks <- function(asa_index, ncores) {
   out <- foreach(i = 1:nrow(asa_index), 
                  .packages = c("dplyr", "magrittr", "igraph", "tidyr",

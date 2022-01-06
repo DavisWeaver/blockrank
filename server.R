@@ -6,9 +6,9 @@ source("utils.R")
 shinyServer(function(input, output) {
   
   graph_data <- reactiveValues(
-   
     nodes = nodes_init,
     edges = edges_init,
+    max_node_value = max(nodes_init$amount),
     wallet_number = nrow(nodes_init),
     scam_wallets = sum(nodes_init$group == "blacklist"), 
     sus_wallets = sum(nodes_init$group == "suspicious"),
@@ -22,20 +22,19 @@ shinyServer(function(input, output) {
   output$blacklist_number <- renderText(graph_data$scam_wallets)
   output$sus_number <- renderText(graph_data$sus_wallets)
   
-  #just for debugging
-  output$all_nodes = renderTable({
-    graph_data$nodes
-  })
-  
   #initialize a new graph when you change the ASA_id
   observeEvent(input$asa_id, {
     id_df = asa_index %>% filter(asa_name == input$asa_id)
     id = id_df$asa_id
+    
     #construct network for asa_id-  need to cache this I would think
-    out = create_network(ASA_id = id)
+    out = create_network(ASA_id = id, min_holding = id_df$min_holding, 
+                         decimal = id_df$decimal, 
+                         minimum_tx = id_df$minimum_tx)
     
     #update all the reactive values
     graph_data$nodes = out[[1]]
+    graph_data$max_node_value = max(out[[1]]$amount)
     graph_data$edges = out[[2]] 
     graph_data$g = out[[3]]
     graph_data$wallet_number = nrow(graph_data$nodes)
@@ -43,7 +42,7 @@ shinyServer(function(input, output) {
     graph_data$sus_wallets = sum(graph_data$nodes$group == "suspicious")
     
     #need a version of edges that isn't reactive
-
+    
     output$main_network <- renderVisNetwork({
       visNetwork(out[[1]], out[[2]]) %>%
         visEdges(smooth = FALSE,
@@ -62,6 +61,48 @@ shinyServer(function(input, output) {
     
   })
   
+  observeEvent(input$min_holding, {
+    if(input$min_holding > graph_data$max_node_value) {
+      showNotification("No nodes meet these criteria, defaulting to previous value")
+    } else {
+      
+      id_df = asa_index %>% filter(asa_name == input$asa_id)
+      id = id_df$asa_id
+      
+      #construct network for asa_id-  need to cache this I would think
+      out2 = create_network(ASA_id = id, min_holding = input$min_holding, 
+                            decimal = id_df$decimal, 
+                            minimum_tx = id_df$minimum_tx)
+      
+      #this will fly an error if there are no nodes or edges that match whatever condition
+      nodes_prev <- graph_data$nodes
+      edges_prev <- graph_data$edges
+      #update all the reactive values
+      graph_data$nodes = out2[[1]]
+      graph_data$edges = out2[[2]] 
+      graph_data$g = out2[[3]]
+      graph_data$wallet_number = nrow(graph_data$nodes)
+      graph_data$scam_wallets = sum(graph_data$nodes$group == "blacklist") 
+      graph_data$sus_wallets = sum(graph_data$nodes$group == "suspicious")
+      
+      #Add nodes and edges if we made it more inclusive
+      if(nrow(out[[1]]) > nrow(nodes_prev)) {
+        visNetworkProxy("main_network") %>%
+          visUpdateNodes(out2[[1]]) %>% 
+          visUpdateEdges(out2[[2]])
+      } else {
+        nodes_remove <- nodes_prev %>% filter(!(id %in% graph_data$nodes$id))
+        visNetworkProxy("main_network") %>%
+          visRemoveNodes(nodes_remove$id) %>% 
+          visRemoveEdges(nodes_remove$id)
+      }
+    }
+    
+    
+    
+    
+    
+  })
   #this will 
   observeEvent(input$main_network_graphChange, {
     # If the user added a node, add it to the data frame of nodes.
@@ -117,7 +158,7 @@ shinyServer(function(input, output) {
     
     visNetworkProxy("main_network") %>%
       visUpdateNodes(nodes = graph_data$nodes)
-
+    
     #update reactive values
     graph_data$scam_wallets = sum(graph_data$nodes$group == "blacklist") 
     graph_data$sus_wallets = sum(graph_data$nodes$group == "suspicious")

@@ -111,7 +111,7 @@ get_all_tx <- function(ASA_id = "432975976", ncores = 1) {
 #df <- get_all_tx()
 #save(df, file = "./data/USSR_tx_all.Rda")
 
-init_network <- function(df, blacklist =  "data/blacklist.csv", 
+build_network <- function(df, blacklist =  "data/blacklist.csv", 
                          whitelist = "data/whitelist.csv", 
                          minimum_tx = 10000000, 
                          min_holding,
@@ -122,33 +122,24 @@ init_network <- function(df, blacklist =  "data/blacklist.csv",
   whitelist <- read.csv(whitelist)$Addresses
   
   #if we already did some of the cleaning in init_network
-  if(ncol(df) == 7) {
-    edges <- df %>%
-      mutate(amount = amount/(10^decimal)) %>%
-      rename(from = sender,
-             to = receiver) %>%
-      group_by(from, to) %>% 
-      summarise(amount = sum(amount), 
-                confirmed_round = max(confirmed_round)) %>% 
-      filter(amount > minimum_tx) %>% 
-      mutate(ASA_id = ASA_id)
-    edges$value <- scale(edges$amount)[1:nrow(edges)]
-  } else {
-    edges <- df %>% 
+  if(ncol(df) != 7) {
+    df <- df %>% 
       clean_names() %>% 
       select(asset_transfer_transaction, sender, confirmed_round) %>% 
-      unnest(cols = c(asset_transfer_transaction)) %>%
-      mutate(amount = amount/(10^decimal)) %>%
-      rename(from = sender,
-             to = receiver) %>%
-      group_by(from, to) %>% 
-      summarise(amount = sum(amount),
-                confirmed_round = max(confirmed_round)) %>% 
-      filter(amount > minimum_tx) %>% 
-      mutate(color = "red")
-    edges$value <- scale(edges$amount)[1:nrow(edges)]
+      unnest(cols = c(asset_transfer_transaction))
   }
   
+  #finish the cleaning
+  edges <- df %>%
+    mutate(amount = amount/(10^decimal)) %>%
+    rename(from = sender,
+           to = receiver) %>%
+    group_by(from, to) %>% 
+    summarise(amount = sum(amount), 
+              confirmed_round = max(confirmed_round)) %>% 
+    mutate(ASA_id = ASA_id, 
+           color = "red")
+  edges$value <- scale(edges$amount)[1:nrow(edges)]
   
   #create a possible blacklist based on nodes that transact with the actual blacklist
   possible_blacklist <- edges %>% 
@@ -167,23 +158,14 @@ init_network <- function(df, blacklist =  "data/blacklist.csv",
                      ASA_id = ASA_id) %>% 
     mutate(group = 
              case_when(id %in% blacklist ~ "blacklist", 
-                       id %in% possible_blacklist ~ "suspicious", 
+                       id %in% possible_blacklist ~ "suspicious",
+                       id %in% whitelist ~ "whitelist",
                        TRUE ~ "clean"), 
-           label = group) %>% 
-    filter(!(id %in% whitelist))
-  edges <- edges %>% filter(from %in% nodes$id & to %in% nodes$id)
-  
+           label = group) 
   
   #compute the algo edges --> this takes a minute
   edges <- compute_algo_edges(nodes = nodes, edges = edges, ncores = ncores, whitelist = whitelist)
   #add some key variables
-  nodes <- compute_degree(nodes, edges) %>% 
-    mutate(degree = ifelse(is.na(degree), 0, degree))
-  
-  #want to compute the algo edges/ node info here as well.
-  
-  #only keep nodes w/ a certain minimum degree
-  nodes <- nodes %>% filter(degree >= minimum_degree)
   #add a font size column to the node df to hide labels
   nodes$font.size <- 0
   
@@ -196,11 +178,17 @@ init_network <- function(df, blacklist =  "data/blacklist.csv",
 #function to compute the degree of everything
 compute_degree <- function(nodes, edges) {
   #compute g and get the degree of every node
-  edges <- edges %>% select(from, to) %>% as.matrix()
-  g <- igraph::graph_from_edgelist(edges, directed = FALSE)
+  edges_mat <- edges %>% select(from, to) %>% as.matrix(byrow = TRUE)
+  g <- igraph::graph_from_edgelist(edges_mat)
   degree <- igraph::degree(g)
   degree_df <- data.frame(id = names(degree), degree = degree)
-  nodes <- left_join(nodes, degree_df)
+  
+  if(any(colnames(nodes) == "degree")) { #we used to compute degree up front so just need to correct for that if so
+    nodes <- nodes %>% select(-degree)
+  }
+  nodes <- left_join(nodes, degree_df) %>% 
+    mutate(degree = ifelse(is.na(degree), 0, degree)) 
+  
   return(nodes)
 }
 
@@ -213,6 +201,7 @@ compute_algo_edges <- function(nodes, edges, whitelist, ncores) {
   #Setup to loop through every wallet, grabbing algo transactions
   out_list <- list()
   ids <- nodes$id
+  ids <- ids[!(ids %in% whitelist)]
   
   #setup cluster
   cl <- parallel::makeCluster(ncores)
@@ -257,11 +246,9 @@ compute_algo_edges <- function(nodes, edges, whitelist, ncores) {
           select(sender, receiver, amount, id)
         df_list[[j]] <- page_df
       }
-      #bind all the pages of results together and filter out transactions involving whitelisted wallets
+      #bind all the pages of results together
       #also filter out all transactions where to and from aren't in ids
-      df_i <- bind_rows(df_list) %>% filter(!(sender %in% whitelist), 
-                                            !(receiver %in% whitelist), 
-                                            sender %in% ids & receiver %in% ids)
+      df_i <- bind_rows(df_list) %>% filter(sender %in% ids & receiver %in% ids)
       
       
       return(df_i)
@@ -283,11 +270,13 @@ compute_algo_edges <- function(nodes, edges, whitelist, ncores) {
            to = "receiver") %>% 
     group_by(from, to) %>% 
     summarise(amount = sum(amount)/(10^6)) %>%
-    mutate(color = "black")
+    mutate(color = "black", 
+           ASA_id = NA)
   
   df$value <- scale(df$amount)[1:nrow(df)]
   
-  edges <- bind_rows(edges, df)
+  edges <- bind_rows(edges, df) %>% 
+    filter(!is.na(from), !is.na(to))
   return(edges)
   
 }
@@ -316,19 +305,46 @@ compute_holdings <- function(ASA_id, min_holding = 10000, decimal = 3) {
   balances <- bind_rows(df_list)
   
   
-  
+  #do some more data cleaning
   balances$amount <- balances$amount/(10^decimal)
-  balances <- balances %>% filter(amount > min_holding) %>% 
+  balances <- balances %>% 
     select(address, amount) %>% rename(id = address)
   
   nodes <- balances %>% mutate(value = amount)
   return(nodes)
 }
 
-filter_network <- function(nodes, edges, ASA_id, whitelist, blacklist, min_holding, 
+filter_network <- function(ASA_id, whitelist, blacklist, min_holding, 
                            minimum_tx, minimum_degree) {
+  if(file.exists(paste0("data/", ASA_id, "_network.Rda"))) {
+    load(paste0("data/", ASA_id, "_network.Rda"))
+  } else {
+    stop("ASA_id not found")
+  }
+  nodes <- out[[1]]
+  edges <- out[[2]]
+  #Load the blacklist and whitelist
+  blacklist <- read.csv(blacklist)$Addresses
+  whitelist <- read.csv(whitelist)$Addresses
+  
   nodes <- nodes %>% 
-    filter(!(from %in% whitelist), !(to %in% whitelist))
+    filter(!(id %in% whitelist), 
+           amount > min_holding)
+  
+  #don't filter out the algo transactions - they are on an entirely different scale 
+  edges <- edges %>% 
+    filter(!(from %in% whitelist), !(to %in% whitelist), 
+           amount > minimum_tx & color == "red" | color == "black", 
+           from %in% nodes$id & to %in% nodes$id)
+  
+  #recalculate degree for the new edges
+  nodes <- compute_degree(nodes, edges) %>% 
+    filter(degree >= minimum_degree)
+  #filter nodes to remove any that aren't the minimum_degree
+ 
+  edges_mat <- edges %>% select(from,to) %>% as.matrix()
+  g <- igraph::graph_from_edgelist(edges_mat)
+  return(list(nodes, edges, g))
 }
 
 #Main Function that checks it and also the cache
@@ -336,24 +352,29 @@ create_network <- function(ASA_id = "432975976",
                            decimal = 3, 
                            min_holding = 100000,
                            blacklist =  "data/blacklist.csv", 
-                           minimum_tx = 10000000, 
+                           minimum_tx = 1000, 
                            minimum_degree = 1,
                            force_update = FALSE, 
                            ncores = 1) {
   
+  #define whitelist based on ASA_id
+  whitelist <- paste0("data/", ASA_id, "_whitelist.csv")
   if(file.exists(paste0("data/", ASA_id, "_network.Rda")) & !force_update) {
-    load(paste0("data/", ASA_id, "_network.Rda"))
+    out <- filter_network(ASA_id = ASA_id, whitelist = whitelist, 
+                          blacklist = blacklist, min_holding = min_holding,
+                          minimum_tx = minimum_tx, 
+                          minimum_degree = minimum_degree)
+    
     return(out)
   } 
   
-  #define whitelist based on ASA_id
-  whitelist <- paste0("data/", ASA_id, "_whitelist.csv")
+
   
   df <- get_all_tx(ASA_id = ASA_id, ncores = ncores)
-  out <- init_network(df = df, blacklist = blacklist, whitelist = whitelist,
-                      minimum_tx = minimum_tx, min_holding = min_holding, 
-                      decimal = decimal, 
-                      minimum_degree = minimum_degree, ASA_id = ASA_id, ncores = ncores)
+  out <- build_network(df = df, blacklist = blacklist, whitelist = whitelist,
+                       minimum_tx = minimum_tx, min_holding = min_holding, 
+                       decimal = decimal, 
+                       minimum_degree = minimum_degree, ASA_id = ASA_id, ncores = ncores)
   
   save(out, file = paste0("data/", ASA_id, "_network.Rda"))
   
@@ -361,15 +382,20 @@ create_network <- function(ASA_id = "432975976",
   
 }
 
-asa_index <- data.frame(asa_name = c("Commie Coin (USSR)","BirdBot (BIRDS)",
+
+asa_index <- data.frame(asa_name = c("Commie Coin (USSR)",
+                                     "BirdBot (BIRDS)",
                                      "Akita Inu (AKITA)",
                                      "AlgoMeow (MEOW)",
                                      "Svansy Coin (SVANSY)", "MoonX (MOONX)",
-                                     "Matrix (MTRX)", 
+                                     "Matrix (MTRX)",
                                      "CryptoRulesEverythingAroundMe (CREAM)"),
-                        asa_id = c(432975976, 478549868, 384303832, 361806984, 
-                                   388502764, 404719435, 234994096, 312412702),
-                        decimal = c(3,0, 0, 0, 6,5, 0, 6))
+                        asa_id = c(432975976, 478549868, 384303832, 
+                                   361806984, 388502764, 404719435,
+                                   234994096, 312412702),
+                        decimal = c(3, 0, 0, 0, 6,5, 0, 6), 
+                        min_holding = c(200000, 10000, 100, 100000, 10000000, 100000, 10000000, 10000), 
+                        minimum_tx = c(10, 10, 10, 10, 10, 10, 10, 10))
 
 
 out = create_network()

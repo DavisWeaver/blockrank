@@ -55,13 +55,8 @@ ui <- shinyUI(
              ),
              fluidRow(
                column(width = 10, offset = 1,
-                      # Display a table with the nodes data
-                      tags$h4("Number of Wallets:"),
-                      textOutput("wallet_number"),
-                      tags$h4("Blacklisted Wallets:"),
-                      textOutput("blacklist_number"),
-                      tags$h4("Suspicious Wallets:"),
-                      textOutput("sus_number"),
+                      # mess around with different network filtering stuff
+                      numericInput("min_holding", "Minimum ASA Holding", value = 200000, min = 0),
                       tags$br(),
                       actionButton("add_sus", "Add Suspicious Wallets to Blacklist"),
                       tags$br(),
@@ -70,7 +65,7 @@ ui <- shinyUI(
                )
              )
       ),
-      # which node did we delete? just to remind people 
+      # 
       column(width = 9, 
              
              fluidRow(
@@ -81,6 +76,19 @@ ui <- shinyUI(
       )
       
     ), 
+    fluidRow(
+      column(width = 3),
+      column(width = 3, 
+             tags$h4("Number of Wallets:"),
+             textOutput("wallet_number")),
+      column(width = 3, 
+             tags$h4("Blacklisted Wallets:"),
+             textOutput("blacklist_number")), 
+      column(width = 3, 
+             tags$h4("Suspicious Wallets:"),
+             textOutput("sus_number"))
+       
+    ),
     fluidRow(
       wellPanel(
 
