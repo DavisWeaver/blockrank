@@ -23,7 +23,7 @@ ui <- shinyUI(
       column(
         width = 4,
         style='border-bottom: 1px solid black; height:60px',
-        tags$h3(tags$a(href = "https://www.commiecoinasa.com/blockrank/support", "Support us"))
+        tags$h3(tags$a(href = "mailto:davis@block-rank.io", "Contact us"))
       ),
       column( 
         width = 4, 
@@ -33,9 +33,8 @@ ui <- shinyUI(
       column(
         width = 4, 
         style='border-bottom: 1px solid black; height:60px',
-        tags$h3("Presented by", 
-                tags$a(href="https://www.commiecoinasa.com", "Commie Coin"), 
-                aligh = "right")
+        tags$img(src = "birdbot.jpeg", width = "40px", height = "55px",
+                 align = "right")
       )
     ),
     
@@ -44,13 +43,7 @@ ui <- shinyUI(
              fluidRow(
                column(width = 10, offset = 1,
                       selectInput("asa_id", "ASA ID:", 
-                                  c("Commie Coin (USSR)",
-                                    "BirdBot (BIRDS)",
-                                    "AlgoMeow (MEOW)", 
-                                    "Akita Inu (AKITA)",
-                                    "Svansy Coin (SVANSY)", "MoonX (MOONX)", 
-                                    "Matrix (MTRX)", 
-                                    "CryptoRulesEverythingAroundMe (CREAM)"))
+                                  c("BirdBot (BIRDS)"))
                )
              ),
              fluidRow(
