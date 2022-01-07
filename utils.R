@@ -112,9 +112,9 @@ get_all_tx <- function(ASA_id = "432975976", ncores = 1, confirmed_round = 1) {
 #save(df, file = "./data/USSR_tx_all.Rda")
 
 build_network <- function(df, blacklist =  "data/blacklist.csv", 
-                         whitelist = "data/whitelist.csv", 
-                         decimal, ASA_id, ncores = 1, 
-                         confirmed_round = 1, quick_build = FALSE) {
+                          whitelist = "data/whitelist.csv", 
+                          decimal, ASA_id, ncores = 1, 
+                          confirmed_round = 1, quick_build = FALSE) {
   
   blacklist <- read.csv(blacklist)$Addresses
   whitelist <- read.csv(whitelist)$Addresses
@@ -269,16 +269,16 @@ compute_algo_edges <- function(nodes, edges, whitelist, ncores, confirmed_round)
   }
   
   #finish cleaning + prepping to graph
-  df <- bind_rows(out2) %>% 
-    distinct(id, .keep_all = TRUE) %>%
-    rename(from = "sender",
-           to = "receiver") %>% 
-    group_by(from, to) %>% 
-    summarise(amount = sum(amount)/(10^6)) %>%
-    mutate(color = "black", 
-           ASA_id = NA)
-  
-  if(nrow(df) != 0) {
+  df <- bind_rows(out2) 
+  if(nrow(df != 0)) {
+    df <- df %>% 
+      distinct(id, .keep_all = TRUE) %>%
+      rename(from = "sender",
+             to = "receiver") %>% 
+      group_by(from, to) %>% 
+      summarise(amount = sum(amount)/(10^6)) %>%
+      mutate(color = "black", 
+             ASA_id = NA)
     df$value <- scale(df$amount)[1:nrow(df)]
     
     edges <- bind_rows(edges, df) %>% 
@@ -348,7 +348,7 @@ filter_network <- function(ASA_id, whitelist, blacklist, min_holding,
   nodes <- compute_degree(nodes, edges) %>% 
     filter(degree >= minimum_degree)
   #filter nodes to remove any that aren't the minimum_degree
- 
+  
   edges_mat <- edges %>% select(from,to) %>% as.matrix()
   g <- igraph::graph_from_edgelist(edges_mat)
   return(list(nodes, edges, g))
@@ -375,7 +375,7 @@ create_network <- function(ASA_id = "432975976",
     return(out)
   } 
   
-
+  
   
   df <- get_all_tx(ASA_id = ASA_id, ncores = ncores)
   out <- build_network(df = df, blacklist = blacklist, whitelist = whitelist,
@@ -388,21 +388,26 @@ create_network <- function(ASA_id = "432975976",
 }
 
 
-#Function to add most up to date transactions to transaction network
+#Function to add most up to date transactions to transaction network- 
+#this should run in a few minutes or less compared to hours for a full download
 update_network <- function(ASA_id = "432975976", 
                            decimal = 3, 
                            blacklist =  "data/blacklist.csv", 
                            ncores = 1, quick_build = TRUE) {
   
   whitelist <- paste0("data/", ASA_id, "_whitelist.csv")
+  #load current network
   load(paste0("data/", ASA_id, "_network.Rda"))
+  #extract current nodes and edges
   nodes <- out[[1]]
   edges <- out[[2]] %>% 
     mutate(ASA_id = as.numeric(ASA_id))
   #grab the last known round
-  last_round <- max(edges$confirmed_round, na.rm = TRUE) 
+  last_round <- max(edges$confirmed_round, na.rm = TRUE)
+  #get all transactions for the ASA since the last known round
   df <- get_all_tx(ASA_id = ASA_id, ncores = ncores, confirmed_round = last_round)
   
+  #do all the required post-processing and additional steps to create networks from all transactions since the last known round.
   out <- build_network(df, decimal = decimal, blacklist = blacklist, 
                        whitelist = whitelist, ncores = 4, 
                        confirmed_round = last_round, quick_build = quick_build,
@@ -430,8 +435,6 @@ update_network <- function(ASA_id = "432975976",
   out <- list(nodes, edges, g) 
   
   save(out, file = paste0("data/", ASA_id, "_network.Rda"))
-  
-  
 }
 
 
@@ -454,7 +457,7 @@ out = create_network()
 nodes_init <- out[[1]]
 edges_init <- out[[2]] 
 ledges <- data.frame(color = c("red", "black"),
-                               label = c("ASA", "Algo"), arrows =c("to"), 
+                     label = c("ASA", "Algo"), arrows =c("to"), 
                      font.size = c(16), 
                      width = 4, length = 10)
 g_init <- out[[3]]

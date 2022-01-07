@@ -61,6 +61,9 @@ ui <- shinyUI(
                       actionButton("add_sus", "Add Suspicious Wallets to Blacklist"),
                       tags$br(),
                       tags$br(),
+                      actionButton("update_networks", "Fetch most recent transactions"),
+                      tags$br(),
+                      tags$br(),
                       downloadButton("download", "Download Current Blacklist")
                )
              )

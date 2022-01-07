@@ -42,7 +42,6 @@ shinyServer(function(input, output) {
     graph_data$sus_wallets = sum(graph_data$nodes$group == "suspicious")
     
     #need a version of edges that isn't reactive
-    
     output$main_network <- renderVisNetwork({
       visNetwork(out[[1]], out[[2]]) %>%
         visEdges(smooth = FALSE,
@@ -167,6 +166,33 @@ shinyServer(function(input, output) {
     graph_data$current_blacklist = graph_data$nodes %>% filter(group == "blacklist") %>% 
       select(id)
   }) 
+  
+  observeEvent(input$update_networks, {
+    
+    showNotification("This may take a few moments", duration = 5)
+    id_df = asa_index %>% filter(asa_name == input$asa_id)
+    id = id_df$asa_id
+    
+    update_network(ASA_id = id, ncores = 1)
+    #construct network for asa_id-  need to cache this I would think
+    out = create_network(ASA_id = id, min_holding = input$min_holding, 
+                          decimal = id_df$decimal, 
+                          minimum_tx = id_df$minimum_tx)
+    
+    graph_data$nodes = out[[1]]
+    graph_data$max_node_value = max(out[[1]]$amount)
+    graph_data$edges = out[[2]] 
+    graph_data$g = out[[3]]
+    graph_data$wallet_number = nrow(graph_data$nodes)
+    graph_data$scam_wallets = sum(graph_data$nodes$group == "blacklist") 
+    graph_data$sus_wallets = sum(graph_data$nodes$group == "suspicious")
+    
+    visNetworkProxy("main_network") %>%
+      visUpdateEdges(out[[2]]) %>%
+      visUpdateNodes(out[[1]])
+    
+    showNotification("Transactions updated", duration = 5)
+  })
   
   output$download <- downloadHandler(
     filename = function () {
