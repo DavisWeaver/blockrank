@@ -62,45 +62,47 @@ shinyServer(function(input, output) {
   })
   
   observeEvent(input$min_holding, {
-    if(input$min_holding > graph_data$max_node_value) {
-      showNotification("No nodes meet these criteria, defaulting to previous value")
-    } else {
-      
-      id_df = asa_index %>% filter(asa_name == input$asa_id)
-      id = id_df$asa_id
-      
-      #construct network for asa_id-  need to cache this I would think
-      out2 = create_network(ASA_id = id, min_holding = input$min_holding, 
-                            decimal = id_df$decimal, 
-                            minimum_tx = id_df$minimum_tx)
-      
-      #this will fly an error if there are no nodes or edges that match whatever condition
-      nodes_prev <- graph_data$nodes
-      edges_prev <- graph_data$edges
-      #update all the reactive values
-      graph_data$nodes = out2[[1]]
-      graph_data$edges = out2[[2]] 
-      graph_data$g = out2[[3]]
-      graph_data$wallet_number = nrow(graph_data$nodes)
-      graph_data$scam_wallets = sum(graph_data$nodes$group == "blacklist") 
-      graph_data$sus_wallets = sum(graph_data$nodes$group == "suspicious")
-      
-      #Add nodes and edges if we made it more inclusive
-      if(nrow(out[[1]]) > nrow(nodes_prev)) {
-        visNetworkProxy("main_network") %>%
-          visUpdateNodes(out2[[1]]) %>% 
-          visUpdateEdges(out2[[2]])
+    
+    if(is.numeric(input$min_holding)) {
+      if(input$min_holding > graph_data$max_node_value) {
+        showNotification("No nodes meet these criteria, defaulting to previous value")
       } else {
-        nodes_remove <- nodes_prev %>% filter(!(id %in% graph_data$nodes$id))
-        visNetworkProxy("main_network") %>%
-          visRemoveNodes(nodes_remove$id) %>% 
-          visRemoveEdges(nodes_remove$id)
-      }
+        
+        id_df = asa_index %>% filter(asa_name == input$asa_id)
+        id = id_df$asa_id
+        
+        #construct network for asa_id-  need to cache this I would think
+        out2 = create_network(ASA_id = id, min_holding = input$min_holding, 
+                              decimal = id_df$decimal, 
+                              minimum_tx = id_df$minimum_tx)
+        
+        if(nrow(out2[[1]]) > 1000) {
+          showNotification("Warning: Large network, expect decreased performance", duration = 10)
+        }
+        #this will fly an error if there are no nodes or edges that match whatever condition
+        nodes_prev <- graph_data$nodes
+        edges_prev <- graph_data$edges
+        #update all the reactive values
+        graph_data$nodes = out2[[1]]
+        graph_data$edges = out2[[2]] 
+        graph_data$g = out2[[3]]
+        graph_data$wallet_number = nrow(graph_data$nodes)
+        graph_data$scam_wallets = sum(graph_data$nodes$group == "blacklist") 
+        graph_data$sus_wallets = sum(graph_data$nodes$group == "suspicious")
+        
+        #Add nodes and edges if we made it more inclusive
+        if(nrow(out2[[1]]) > nrow(nodes_prev)) {
+          visNetworkProxy("main_network") %>%
+            visUpdateNodes(out2[[1]]) %>% 
+            visUpdateEdges(out2[[2]])
+        } else {
+          nodes_remove <- nodes_prev %>% filter(!(id %in% graph_data$nodes$id))
+          visNetworkProxy("main_network") %>%
+            visRemoveNodes(nodes_remove$id) %>% 
+            visRemoveEdges(nodes_remove$id)
+        }
+      } 
     }
-    
-    
-    
-    
     
   })
   #this will 

@@ -8,19 +8,25 @@ library(tidyr)
 library(igraph)
 source("utils.R")
 
-update_networks <- function(asa_index, ncores) {
+update_networks <- function(asa_index, ncores, quick_build = TRUE) {
   out <- foreach(i = 1:nrow(asa_index), 
                  .packages = c("dplyr", "magrittr", "igraph", "tidyr",
                                "janitor", "jsonlite", "curl"), 
                  .export = c("create_network", "get_all_tx", "init_network", 
                              "compute_degree", "compute_holdings", 
-                             "generate_daterange")) %do% {
-    asa_i <- slice(asa_index, i)
-    out = create_network(ASA_id = asa_i$asa_id, minimum_degree = 1, minimum_tx = 10,
-                         min_holding= asa_i$min_holding, force_update = TRUE,
-                         decimal = asa_i$decimal, ncores = ncores)
-    return(NULL)
-  }
+                             "generate_daterange")) %do%
+    {
+      
+      asa_i <- slice(asa_index, i)
+      if(file.exists(paste0("data/", asa_i$asa_id, "_network.Rda"))) {
+        update_network(ASA_id = asa_i$asa_id, decimal = asa_i$decimal, ncores = ncores, 
+                       quick_build = quick_build)
+      } else {
+        out = create_network(ASA_id = asa_i$asa_id, force_update = TRUE,
+                             decimal = asa_i$decimal, ncores = ncores)
+        return(NULL)
+      }
+    }
 }
 
 # asa_index <- data.frame(asa_name = c("Commie Coin (USSR)","BirdBot (BIRDS)",

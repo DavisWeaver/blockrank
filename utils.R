@@ -17,11 +17,11 @@ generate_daterange <- function() {
 }
 
 #Main function to download all transactions for a given ASA
-get_all_tx <- function(ASA_id = "432975976", ncores = 1) {
+get_all_tx <- function(ASA_id = "432975976", ncores = 1, confirmed_round = 1) {
   tmp <- tempfile()
   
   test <- try(curl_download(paste0('https://algoindexer.algoexplorerapi.io/v2/assets/', 
-                                   ASA_id, '/transactions'), tmp))
+                                   ASA_id, '/transactions?min-round=', confirmed_round), tmp))
   if(inherits(test, "try-error")) {
     #try backup pipeline for large numbers of transactions ASAs
     date_range <- generate_daterange()
@@ -44,7 +44,7 @@ get_all_tx <- function(ASA_id = "432975976", ncores = 1) {
         download_string_i <- 
           paste0('https://algoindexer.algoexplorerapi.io/v2/assets/', 
                  ASA_id, '/transactions?after-time=', date_i,
-                 '&before-time=', date_i1)
+                 '&before-time=', date_i1, '&min-round=', confirmed_round)
         #try the damn thing twice and no more
         test <- try(curl_download(download_string_i, tmp))
         if(inherits(test, "try-error")) {
@@ -113,10 +113,8 @@ get_all_tx <- function(ASA_id = "432975976", ncores = 1) {
 
 build_network <- function(df, blacklist =  "data/blacklist.csv", 
                          whitelist = "data/whitelist.csv", 
-                         minimum_tx = 10000000, 
-                         min_holding,
-                         decimal, 
-                         minimum_degree, ASA_id, ncores = 1) {
+                         decimal, ASA_id, ncores = 1, 
+                         confirmed_round = 1, quick_build = FALSE) {
   
   blacklist <- read.csv(blacklist)$Addresses
   whitelist <- read.csv(whitelist)$Addresses
@@ -154,7 +152,7 @@ build_network <- function(df, blacklist =  "data/blacklist.csv",
   
   #compute the holding using the API
   nodes <- 
-    compute_holdings(decimal = decimal, min_holding = min_holding,
+    compute_holdings(decimal = decimal,
                      ASA_id = ASA_id) %>% 
     mutate(group = 
              case_when(id %in% blacklist ~ "blacklist", 
@@ -163,8 +161,14 @@ build_network <- function(df, blacklist =  "data/blacklist.csv",
                        TRUE ~ "clean"), 
            label = group) 
   
+  #don't get all algo edges if quick build is true
+  if(quick_build) {
+    nodes <- nodes %>% filter(id %in% edges$from | id %in% edges$to)
+  }
+  
   #compute the algo edges --> this takes a minute
-  edges <- compute_algo_edges(nodes = nodes, edges = edges, ncores = ncores, whitelist = whitelist)
+  edges <- compute_algo_edges(nodes = nodes, edges = edges, ncores = ncores, 
+                              whitelist = whitelist, confirmed_round = confirmed_round)
   #add some key variables
   #add a font size column to the node df to hide labels
   nodes$font.size <- 0
@@ -193,7 +197,7 @@ compute_degree <- function(nodes, edges) {
 }
 
 #Function to compute the edges for algo transactions
-compute_algo_edges <- function(nodes, edges, whitelist, ncores) {
+compute_algo_edges <- function(nodes, edges, whitelist, ncores, confirmed_round) {
   
   #initialize tempfile for downloads
   tmp <- tempfile()
@@ -213,7 +217,8 @@ compute_algo_edges <- function(nodes, edges, whitelist, ncores) {
     {
       curl_download(
         paste0('https://algoindexer.algoexplorerapi.io/v2/accounts/', ids[i], 
-               '/transactions?tx-type=pay&currency-greater-than=1000000'), tmp
+               '/transactions?tx-type=pay&currency-greater-than=1000000&min-round=', 
+               confirmed_round), tmp
       )
       
       #Get the first page of results
@@ -273,15 +278,17 @@ compute_algo_edges <- function(nodes, edges, whitelist, ncores) {
     mutate(color = "black", 
            ASA_id = NA)
   
-  df$value <- scale(df$amount)[1:nrow(df)]
-  
-  edges <- bind_rows(edges, df) %>% 
-    filter(!is.na(from), !is.na(to))
+  if(nrow(df) != 0) {
+    df$value <- scale(df$amount)[1:nrow(df)]
+    
+    edges <- bind_rows(edges, df) %>% 
+      filter(!is.na(from), !is.na(to))
+  } 
   return(edges)
   
 }
 
-compute_holdings <- function(ASA_id, min_holding = 10000, decimal = 3) {
+compute_holdings <- function(ASA_id, decimal = 3) {
   tmp <- tempfile()
   
   test <- try(curl_download(paste0('https://algoindexer.algoexplorerapi.io/v2/assets/', 
@@ -372,13 +379,58 @@ create_network <- function(ASA_id = "432975976",
   
   df <- get_all_tx(ASA_id = ASA_id, ncores = ncores)
   out <- build_network(df = df, blacklist = blacklist, whitelist = whitelist,
-                       minimum_tx = minimum_tx, min_holding = min_holding, 
-                       decimal = decimal, 
-                       minimum_degree = minimum_degree, ASA_id = ASA_id, ncores = ncores)
+                       decimal = decimal, ASA_id = ASA_id, ncores = ncores)
   
   save(out, file = paste0("data/", ASA_id, "_network.Rda"))
   
   return(out)
+  
+}
+
+
+#Function to add most up to date transactions to transaction network
+update_network <- function(ASA_id = "432975976", 
+                           decimal = 3, 
+                           blacklist =  "data/blacklist.csv", 
+                           ncores = 1, quick_build = TRUE) {
+  
+  whitelist <- paste0("data/", ASA_id, "_whitelist.csv")
+  load(paste0("data/", ASA_id, "_network.Rda"))
+  nodes <- out[[1]]
+  edges <- out[[2]] %>% 
+    mutate(ASA_id = as.numeric(ASA_id))
+  #grab the last known round
+  last_round <- max(edges$confirmed_round, na.rm = TRUE) 
+  df <- get_all_tx(ASA_id = ASA_id, ncores = ncores, confirmed_round = last_round)
+  
+  out <- build_network(df, decimal = decimal, blacklist = blacklist, 
+                       whitelist = whitelist, ncores = 4, 
+                       confirmed_round = last_round, quick_build = quick_build,
+                       ASA_id = ASA_id)
+  
+  #bind the new and old nodes together
+  new_nodes <- out[[1]] %>% filter(!(id %in% nodes$id))
+  new_edges <- out[[2]] %>% 
+    mutate(ASA_id = as.numeric(ASA_id))
+  
+  nodes <- bind_rows(nodes, new_nodes)
+  #re-do the processing to incorporate the new transactions
+  edges <- bind_rows(edges, new_edges) %>% 
+    group_by(from, to, ASA_id, color) %>% 
+    summarise(amount = sum(amount), 
+              confirmed_round = max(confirmed_round)) %>% 
+    ungroup()
+  edges$value <- scale(edges$amount)[1:nrow(edges)]
+  
+  
+  edges_mat <- edges %>% select(from,to) %>% as.matrix()
+  
+  #remake the graph g from the new edges
+  g <- igraph::graph_from_edgelist(edges_mat, directed = FALSE)
+  out <- list(nodes, edges, g) 
+  
+  save(out, file = paste0("data/", ASA_id, "_network.Rda"))
+  
   
 }
 
