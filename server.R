@@ -1,6 +1,6 @@
 library(shiny)
 library(visNetwork)
-source("utils.R")
+source("utils/utils.R")
 
 # Define server logic required to draw a histogram
 shinyServer(function(input, output) {
