@@ -6,7 +6,7 @@ library(magrittr)
 library(janitor)
 library(tidyr)
 library(igraph)
-source("utils.R")
+source("utils/utils.R")
 
 update_networks <- function(asa_index, ncores, quick_build = TRUE) {
   out <- foreach(i = 1:nrow(asa_index), 
@@ -36,16 +36,23 @@ update_networks <- function(asa_index, ncores, quick_build = TRUE) {
 #                                      "Matrix (MTRX)", "CryptoRulesEverythingAroundMe (CREAM)"),
 #                         asa_id = c(432975976, 478549868, 384303832, 361806984, 388502764, 404719435, 234994096, 312412702),
 #                         decimal = c(3,0, 0, 0, 6,5, 0, 6))
+# 
+# asa_index <- data.frame(asa_name = c("Commie Coin (USSR)",
+#                                      "BirdBot (BIRDS)",
+#                                      "AlgoMeow (MEOW)",
+#                                      "Svansy Coin (SVANSY)", "MoonX (MOONX)",
+#                                      "Matrix (MTRX)",
+#                                      "CryptoRulesEverythingAroundMe (CREAM)"),
+#                         asa_id = c(432975976, 478549868, 361806984, 388502764, 404719435,
+#                                    234994096, 312412702),
+#                         decimal = c(3, 0, 0, 6,5, 0, 6), 
+#                         min_holding = c(200000, 10000, 100000, 10000000, 100000, 10000000, 10000))
 
 asa_index <- data.frame(asa_name = c("Commie Coin (USSR)",
-                                     "BirdBot (BIRDS)",
-                                     "AlgoMeow (MEOW)",
-                                     "Svansy Coin (SVANSY)", "MoonX (MOONX)",
-                                     "Matrix (MTRX)",
-                                     "CryptoRulesEverythingAroundMe (CREAM)"),
-                        asa_id = c(432975976, 478549868, 361806984, 388502764, 404719435,
-                                   234994096, 312412702),
-                        decimal = c(3, 0, 0, 6,5, 0, 6), 
-                        min_holding = c(200000, 10000, 100000, 10000000, 100000, 10000000, 10000))
+                                     "BirdBot (BIRDS)"),
+                        asa_id = c(432975976, 478549868),
+                        decimal = c(3, 0), 
+                        min_holding = c(200000, 10000))
 
+pick_chain("algo")
 update_networks(asa_index = asa_index, ncores = 6)

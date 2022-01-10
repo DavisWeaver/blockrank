@@ -1,6 +1,7 @@
 library(shiny)
 library(visNetwork)
 source("utils/utils.R")
+pick_chain("algo")
 
 # Define server logic required to draw a histogram
 shinyServer(function(input, output) {
@@ -28,7 +29,7 @@ shinyServer(function(input, output) {
     id = id_df$asa_id
     
     #construct network for asa_id-  need to cache this I would think
-    out = create_network(ASA_id = id, min_holding = id_df$min_holding, 
+    out = create_network(ASA_id = id, min_holding = input$min_holding, 
                          decimal = id_df$decimal, 
                          minimum_tx = id_df$minimum_tx)
     
@@ -51,6 +52,17 @@ shinyServer(function(input, output) {
         visGroups(groupname = "clean", color = "blue") %>%
         visOptions(selectedBy = "group", 
                    manipulation = TRUE) %>% 
+        visInteraction(hover = T) %>% 
+        visEvents(hoverNode  = "function(e){
+            var label_info = this.body.data.nodes.get({
+              fields: ['label', 'label_long'],
+              filter: function (item) {
+                return item.id === e.node
+              },
+              returnType :'Array'
+            });
+            this.body.data.nodes.update({id: e.node, label : label_info[0].label_long, label_long : label_info[0].label});
+            }") %>% 
         visLegend(width = 0.15, position = "right", 
                   addEdges = ledges, useGroups = FALSE)
     })
