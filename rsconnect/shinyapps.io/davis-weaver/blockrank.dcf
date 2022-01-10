@@ -5,9 +5,9 @@ account: davis-weaver
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 5381054
-bundleId: 5440927
+bundleId: 5452924
 url: https://davis-weaver.shinyapps.io/blockrank/
-when: 1641488668.49959
-lastSyncTime: 1641488668.49959
+when: 1641835453.14659
+lastSyncTime: 1641835453.14659
 asMultiple: FALSE
 asStatic: FALSE

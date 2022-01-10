@@ -23,7 +23,7 @@ ui <- shinyUI(
       column(
         width = 4,
         style='border-bottom: 1px solid black; height:60px',
-        tags$h3(tags$a(href = "https://www.commiecoinasa.com/blockrank/support", "Support us"))
+        tags$h3(tags$a(href = "mailto:davis@block-rank.io", "Contact us"))
       ),
       column( 
         width = 4, 
