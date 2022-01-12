@@ -22,20 +22,20 @@ ui <- shinyUI(
     fluidRow(
       column(
         width = 4,
-        style='border-bottom: 1px solid black; height:60px',
+        style='border-bottom: 1px solid black; height:80px',
         tags$h3(tags$a(href = "mailto:davis@block-rank.io", "Contact us"))
       ),
       column( 
         width = 4, 
-        style='border-bottom: 1px solid black; height:60px',
-        tags$h1(strong("BlockRank"), align = "center")
+        style='border-bottom: 1px solid black; height:80px',
+        tags$h1(tags$img(src = "br_title.png", width = '280px', height = '50px'), 
+                align = "center")
       ),
       column(
         width = 4, 
-        style='border-bottom: 1px solid black; height:60px',
-        tags$h3("Presented by", 
-                tags$a(href="https://www.commiecoinasa.com", "Commie Coin"), 
-                aligh = "right")
+        style='border-bottom: 1px solid black; height:80px',
+        tags$h3(tags$a(href="https://www.youtube.com/watch?v=0s2u_U9JxUI&t=2s&ab_channel=BlockRank", "How does this work?"), 
+                align = "right")
       )
     ),
     
@@ -87,13 +87,13 @@ ui <- shinyUI(
       column(width = 3, 
              tags$h4("Suspicious Wallets:"),
              textOutput("sus_number"))
-       
+      
     ),
     fluidRow(
       wellPanel(
-
+        
         includeHTML("./www/include_footer.html")
-  
+        
       ),
       
     )
