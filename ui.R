@@ -22,17 +22,18 @@ ui <- shinyUI(
     fluidRow(
       column(
         width = 4,
-        style='border-bottom: 1px solid black; height:60px',
+        style='border-bottom: 1px solid black; height:80px',
         tags$h3(tags$a(href = "mailto:davis@block-rank.io", "Contact us"))
       ),
       column( 
         width = 4, 
-        style='border-bottom: 1px solid black; height:60px',
-        tags$h1(strong("BlockRank"), align = "center")
+        style='border-bottom: 1px solid black; height:80px',
+        tags$h1(tags$img(src = "br_title.png", width = '280px', height = '50px'), 
+                align = "center")
       ),
       column(
         width = 4, 
-        style='border-bottom: 1px solid black; height:60px',
+        style='border-bottom: 1px solid black; height:80px',
         tags$img(src = "birdbot.jpeg", width = "40px", height = "55px",
                  align = "right")
       )
