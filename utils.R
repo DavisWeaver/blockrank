@@ -174,16 +174,14 @@ build_network <- function(df, blacklist =  "data/blacklist.csv",
   nodes$font.size <- 0
   
   #get an igraph g
-  edges_mat <- edges %>% select(from,to) %>% as.matrix()
-  g <- igraph::graph_from_edgelist(edges_mat, directed = FALSE)
+  g <- compute_g(edges)
   return(list(nodes, edges, g))
 } 
 
 #function to compute the degree of everything
 compute_degree <- function(nodes, edges) {
   #compute g and get the degree of every node
-  edges_mat <- edges %>% select(from, to) %>% as.matrix(byrow = TRUE)
-  g <- igraph::graph_from_edgelist(edges_mat)
+  g <- compute_g(edges)
   degree <- igraph::degree(g)
   degree_df <- data.frame(id = names(degree), degree = degree)
   
@@ -194,6 +192,13 @@ compute_degree <- function(nodes, edges) {
     mutate(degree = ifelse(is.na(degree), 0, degree)) 
   
   return(nodes)
+}
+
+compute_g <- function(edges) {
+  edges_mat <- edges %>% select(from, to) %>% as.matrix(byrow = TRUE)
+  g <- igraph::graph_from_edgelist(edges_mat, directed = FALSE)
+  g <- igraph::simplify(g, remove.loops = TRUE, remove.multiple = FALSE)
+  return(g)
 }
 
 #Function to compute the edges for algo transactions
@@ -348,9 +353,7 @@ filter_network <- function(ASA_id, whitelist, blacklist, min_holding,
   nodes <- compute_degree(nodes, edges) %>% 
     filter(degree >= minimum_degree)
   #filter nodes to remove any that aren't the minimum_degree
- 
-  edges_mat <- edges %>% select(from,to) %>% as.matrix()
-  g <- igraph::graph_from_edgelist(edges_mat)
+  g <- compute_g(edges)
   return(list(nodes, edges, g))
 }
 
@@ -423,10 +426,7 @@ update_network <- function(ASA_id = "432975976",
   edges$value <- scale(edges$amount)[1:nrow(edges)]
   
   
-  edges_mat <- edges %>% select(from,to) %>% as.matrix()
-  
-  #remake the graph g from the new edges
-  g <- igraph::graph_from_edgelist(edges_mat, directed = FALSE)
+  g <- compute_g(edges)
   out <- list(nodes, edges, g) 
   
   save(out, file = paste0("data/", ASA_id, "_network.Rda"))

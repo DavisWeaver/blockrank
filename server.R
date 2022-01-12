@@ -116,6 +116,7 @@ shinyServer(function(input, output) {
       #get neighbors if they just blacklisted something
       if(input$main_network_graphChange$label == "blacklist") {
         neighbors <- names(igraph::neighbors(graph_data$g, v = input$main_network_graphChange$id))
+        neighbors <- neighbors[!(neighbors %in% graph_data$current_blacklist$id)]
         temp <- temp %>% 
           mutate(label = ifelse(id %in% neighbors, "suspicious", label))
       }
