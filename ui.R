@@ -34,8 +34,10 @@ ui <- shinyUI(
       column(
         width = 4, 
         style='border-bottom: 1px solid black; height:80px',
-        tags$img(src = "birdbot.jpeg", width = "40px", height = "55px",
-                 align = "right")
+        # tags$img(src = "birdbot.jpeg", width = "40px", height = "55px",
+        #          align = "right")
+        tags$h3(tags$a(href="https://www.youtube.com/watch?v=0s2u_U9JxUI&t=2s&ab_channel=BlockRank", "How does this work?"), 
+                align = "right")
       )
     ),
     
