@@ -393,7 +393,7 @@ filter_network <- function(ASA_id, whitelist, blacklist, min_holding,
   #also configure the long label
   nodes <- compute_degree(nodes, edges) %>% 
     filter(degree >= minimum_degree) %>% 
-    mutate(font.size = 10, 
+    mutate(font.size = 0, 
            wallet_age = round(wallet_age),
            label_long = paste0("Number of Assets: ", num_assets, 
                                " \n Wallet age: ", wallet_age, " days"))

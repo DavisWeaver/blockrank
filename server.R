@@ -209,7 +209,7 @@ shinyServer(function(input, output) {
   
   output$download <- downloadHandler(
     filename = function () {
-      paste0("current_blacklist_", Sys.Date(), ".ecsv")
+      paste0("current_blacklist_", Sys.Date(), ".csv")
     },
     content = function(file) {
       write.csv(graph_data$current_blacklist, file)

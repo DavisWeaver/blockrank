@@ -49,10 +49,12 @@ update_networks <- function(asa_index, ncores, quick_build = TRUE) {
 #                         min_holding = c(200000, 10000, 100000, 10000000, 100000, 10000000, 10000))
 
 asa_index <- data.frame(asa_name = c("Commie Coin (USSR)",
-                                     "BirdBot (BIRDS)"),
-                        asa_id = c(432975976, 478549868),
-                        decimal = c(3, 0), 
-                        min_holding = c(200000, 10000))
+                                     "BirdBot (BIRDS)", 
+                                     "AlgoMeow", 
+                                     "CryptoRulesEverythingAroundMe (CREAM)"),
+                        asa_id = c(432975976, 478549868, 361806984, 312412702),
+                        decimal = c(3, 0, 0, 6), 
+                        min_holding = c(200000, 10000, 10000, 10000))
 
 pick_chain("algo")
 update_networks(asa_index = asa_index, ncores = 6)
