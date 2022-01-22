@@ -15,7 +15,8 @@ shinyServer(function(input, output) {
     sus_wallets = sum(nodes_init$group == "suspicious"),
     current_blacklist = nodes_init %>% filter(group == "blacklist") %>% 
       select(id), 
-    g = g_init
+    g = g_init, 
+    max_degree = max(nodes_init$degree)
   )
   
   #define wallet count outputs
@@ -29,9 +30,13 @@ shinyServer(function(input, output) {
     id = id_df$asa_id
     
     #construct network for asa_id-  need to cache this I would think
-    out = create_network(ASA_id = id, min_holding = input$min_holding, 
+    out = create_network(ASA_id = id, min_holding = id_df$min_holding, 
                          decimal = id_df$decimal, 
                          minimum_tx = id_df$minimum_tx)
+    
+    if(nrow(out[[1]]) > 1000) {
+      showNotification("Warning: Large network, expect decreased performance", duration = 10)
+    }
     
     #update all the reactive values
     graph_data$nodes = out[[1]]
@@ -67,8 +72,17 @@ shinyServer(function(input, output) {
                   addEdges = ledges, useGroups = FALSE)
     })
     
-    visNetworkProxy("main_network") %>%
-      visRedraw()
+    max_degree = max(graph_data$nodes$degree)
+    
+    if(max_degree > 20) {
+      visNetworkProxy("main_network") %>%
+        visRedraw() %>% 
+        visPhysics(barnesHut = list(gravitationalConstant = -100))
+    } else {
+      visNetworkProxy("main_network") %>%
+        visRedraw() 
+    }
+    
     
   })
   
@@ -100,18 +114,34 @@ shinyServer(function(input, output) {
         graph_data$wallet_number = nrow(graph_data$nodes)
         graph_data$scam_wallets = sum(graph_data$nodes$group == "blacklist") 
         graph_data$sus_wallets = sum(graph_data$nodes$group == "suspicious")
+        graph_data$max_degree = max(out2[[1]]$degree)
         
         #Add nodes and edges if we made it more inclusive
         if(nrow(out2[[1]]) > nrow(nodes_prev)) {
-          visNetworkProxy("main_network") %>%
-            visUpdateNodes(out2[[1]]) %>% 
-            visUpdateEdges(out2[[2]])
+          if(graph_data$max_degree > 20) {
+            visNetworkProxy("main_network") %>%
+              visUpdateNodes(out2[[1]]) %>% 
+              visUpdateEdges(out2[[2]]) %>% 
+              visPhysics(barnesHut = list(gravitationalConstant = -400, springLength = 200))
+          } else {
+            visNetworkProxy("main_network") %>%
+              visUpdateNodes(out2[[1]]) %>% 
+              visUpdateEdges(out2[[2]]) 
+          }
         } else {
           nodes_remove <- nodes_prev %>% filter(!(id %in% graph_data$nodes$id))
-          visNetworkProxy("main_network") %>%
-            visRemoveNodes(nodes_remove$id) %>% 
-            visRemoveEdges(nodes_remove$id)
-        }
+          if(graph_data$max_degree > 20) {
+            visNetworkProxy("main_network") %>%
+              visRemoveNodes(nodes_remove$id) %>% 
+              visRemoveEdges(nodes_remove$id) %>% 
+              visPhysics(barnesHut = list(gravitationalConstant = -400, springLength = 200))
+            
+          } else {
+            visNetworkProxy("main_network") %>%
+              visRemoveNodes(nodes_remove$id) %>% 
+              visRemoveEdges(nodes_remove$id) 
+          }
+          }
       } 
     }
     
@@ -189,8 +219,8 @@ shinyServer(function(input, output) {
     update_network(ASA_id = id, ncores = 1)
     #construct network for asa_id-  need to cache this I would think
     out = create_network(ASA_id = id, min_holding = input$min_holding, 
-                          decimal = id_df$decimal, 
-                          minimum_tx = id_df$minimum_tx)
+                         decimal = id_df$decimal, 
+                         minimum_tx = id_df$minimum_tx)
     
     graph_data$nodes = out[[1]]
     graph_data$max_node_value = max(out[[1]]$amount)

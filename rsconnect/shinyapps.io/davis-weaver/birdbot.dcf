@@ -5,9 +5,9 @@ account: davis-weaver
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 5407402
-bundleId: 5462052
+bundleId: 5489556
 url: https://davis-weaver.shinyapps.io/birdbot/
-when: 1642017775.10285
-lastSyncTime: 1642017775.10285
+when: 1642696152.5583
+lastSyncTime: 1642696152.5583
 asMultiple: FALSE
 asStatic: FALSE

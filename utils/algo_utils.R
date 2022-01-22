@@ -179,6 +179,7 @@ build_network <- function(df, blacklist =  "data/blacklist.csv",
   #add some key variables
   #add a font size column to the node df to hide labels
   nodes$font.size <- 0
+  nodes <- get_wallet_info(nodes)
   
   #get an igraph g
   g <- compute_g(edges)
@@ -450,7 +451,7 @@ update_network <- function(ASA_id = "432975976",
   load(paste0("data/", ASA_id, "_network.Rda"))
   #extract current nodes and edges
   nodes <- out[[1]] 
-  if(ncol(nodes) == 7) {
+  if(ncol(nodes) %in% c(6,7)) {
     nodes <- get_wallet_info(nodes)
   }
   edges <- out[[2]] %>% 
@@ -468,10 +469,9 @@ update_network <- function(ASA_id = "432975976",
   
   #bind the new and old nodes together
   new_nodes <- out[[1]] %>% filter(!(id %in% nodes$id)) %>% get_wallet_info()
+  nodes <- bind_rows(new_nodes, nodes)
   new_edges <- out[[2]] %>% 
     mutate(ASA_id = as.numeric(ASA_id))
-  
-  nodes <- bind_rows(nodes, new_nodes)
 
   #re-do the processing to incorporate the new transactions
   edges <- bind_rows(edges, new_edges) %>% 
@@ -491,17 +491,16 @@ update_network <- function(ASA_id = "432975976",
 
 asa_index <- data.frame(asa_name = c("Commie Coin (USSR)",
                                      "BirdBot (BIRDS)",
-                                     "Akita Inu (AKITA)",
                                      "AlgoMeow (MEOW)",
-                                     "Svansy Coin (SVANSY)", "MoonX (MOONX)",
-                                     "Matrix (MTRX)",
-                                     "CryptoRulesEverythingAroundMe (CREAM)"),
-                        asa_id = c(432975976, 478549868, 384303832, 
-                                   361806984, 388502764, 404719435,
-                                   234994096, 312412702),
-                        decimal = c(3, 0, 0, 0, 6,5, 0, 6), 
-                        min_holding = c(200000, 10000, 100, 100000, 10000000, 100000, 10000000, 10000), 
-                        minimum_tx = c(10, 10, 10, 10, 10, 10, 10, 10))
+                                     "CryptoRulesEverythingAroundMe (CREAM)",
+                                     "Parsec (PRSC)",
+                                     "Parsec AU (PRSCau)", 
+                                     "LOUDefi (LOUD)"),
+                        asa_id = c(432975976, 478549868, 361806984, 312412702,
+                                   415045633, 546713076, 457819394),
+                        decimal = c(3, 0, 0, 6, 0, 6, 6),
+                        min_holding = c(200000, 10000, 10000, 10000, 10000, 10000, 10000),
+                        minimum_tx = c(0,0,0,0,0,0,0))
 
 
 out = create_network()
