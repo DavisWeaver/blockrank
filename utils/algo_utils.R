@@ -8,6 +8,7 @@ library(igraph)
 library(lubridate)
 library(foreach)
 
+
 #convenience function for generating a range of dates
 generate_daterange <- function() {
   date_init <- lubridate::as_datetime(Sys.time() - 13000000)
@@ -167,6 +168,7 @@ build_network <- function(df, blacklist =  "data/blacklist.csv",
                        id %in% whitelist ~ "whitelist",
                        TRUE ~ "clean"), 
            label = group) 
+  
   
   #don't get all algo edges if quick build is true
   if(quick_build) {
@@ -364,7 +366,7 @@ get_wallet_age <- function(page) {
   wallet_age <- ((current_round - round) * 4.5)/ 60 / 60 / 24
   
   return(wallet_age)
-
+  
 }
 
 filter_network <- function(ASA_id, whitelist, blacklist, min_holding, 
@@ -384,11 +386,12 @@ filter_network <- function(ASA_id, whitelist, blacklist, min_holding,
     filter(!(id %in% whitelist), 
            amount > min_holding)
   
-  #don't filter out the algo transactions - they are on an entirely different scale 
+  
   edges <- edges %>% 
     filter(!(from %in% whitelist), !(to %in% whitelist), 
            amount > minimum_tx & color == "red" | color == "black", 
            from %in% nodes$id & to %in% nodes$id)
+  
   
   #recalculate degree for the new edges
   #also configure the long label
@@ -468,11 +471,11 @@ update_network <- function(ASA_id = "432975976",
                        ASA_id = ASA_id)
   
   #bind the new and old nodes together
-  new_nodes <- out[[1]] %>% filter(!(id %in% nodes$id)) %>% get_wallet_info()
+  new_nodes <- out[[1]] %>% filter(!(id %in% nodes$id)) #%>% get_wallet_info()
   nodes <- bind_rows(new_nodes, nodes)
   new_edges <- out[[2]] %>% 
     mutate(ASA_id = as.numeric(ASA_id))
-
+  
   #re-do the processing to incorporate the new transactions
   edges <- bind_rows(edges, new_edges) %>% 
     group_by(from, to, ASA_id, color) %>% 
@@ -499,7 +502,7 @@ asa_index <- data.frame(asa_name = c("Commie Coin (USSR)",
                         asa_id = c(432975976, 478549868, 361806984, 312412702,
                                    415045633, 546713076, 457819394),
                         decimal = c(3, 0, 0, 6, 0, 6, 6),
-                        min_holding = c(200000, 10000, 10000, 10000, 1, 100, 10000),
+                        min_holding = c(200000, 10000, 200000, 10000, 1, 100, 10000),
                         minimum_tx = c(0,0,0,0,0,0,0))
 
 

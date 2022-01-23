@@ -237,6 +237,37 @@ shinyServer(function(input, output) {
     showNotification("Transactions updated", duration = 5)
   })
   
+  #search bar
+  observeEvent(input$wallet_search, {
+          if(input$wallet_search %in% graph_data$nodes$id) {
+            visNetworkProxy("main_network") %>%
+              visOptions(highlightNearest = TRUE,
+                         selectedBy = "group", 
+                         manipulation = TRUE) %>% 
+              visSelectNodes(id = input$wallet_search)
+          } else {
+            showNotification("Wallet not found")
+          }
+          
+  })
+  
+  observeEvent(input$clear_blacklist, {
+    graph_data$nodes <- graph_data$nodes %>% 
+      mutate(label = "clean", 
+             group = label)
+    graph_data$current_blacklist = graph_data$nodes %>% filter(group == "blacklist") %>% 
+      select(id)
+    #update network
+    visNetworkProxy("main_network") %>%
+      visUpdateNodes(nodes = graph_data$nodes)
+    
+    #update reactive values
+    graph_data$scam_wallets = sum(graph_data$nodes$group == "blacklist") 
+    graph_data$sus_wallets = sum(graph_data$nodes$group == "suspicious")
+    graph_data$current_blacklist = graph_data$nodes %>% filter(group == "blacklist") %>% 
+      select(id)
+  })
+  
   output$download <- downloadHandler(
     filename = function () {
       paste0("current_blacklist_", Sys.Date(), ".csv")
