@@ -384,7 +384,7 @@ filter_network <- function(ASA_id, whitelist, blacklist, min_holding,
   
   nodes <- nodes %>% 
     filter(!(id %in% whitelist), 
-           amount > min_holding)
+           amount >= min_holding)
   
   
   edges <- edges %>% 

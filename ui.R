@@ -47,30 +47,30 @@ ui <- shinyUI(
              fluidRow(
                column(width = 10, offset = 1,
                       selectInput("asa_id", "ASA ID:", 
-                                  c("Commie Coin (USSR)",
-                                    "BirdBot (BIRDS)", 
-                                    "AlgoMeow (MEOW)", 
-                                    "CryptoRulesEverythingAroundMe (CREAM)", 
-                                    "Parsec (PRSC)", 
-                                    "Parsec AU (PRSCau)")) 
+                                  c("BirdBot (BIRDS)",
+                                    "AlgoMeow (MEOW)",
+                                    "CryptoRulesEverythingAroundMe (CREAM)",
+                                    "Commie Coin (USSR)",
+                                    "Parsec (PRSC)",
+                                    "Parsec AU (PRSCau)"))
                                    # "LOUDefi (LOUD)"))
                )
              ),
              fluidRow(
                column(width = 10, offset = 1,
-                      # mess around with different network filtering stuff
-                      # tags$br(), 
-                      # searchInput('wallet_search', label = "Wallet Search", 
-                      #             btnSearch = icon("search")),
+                      #mess around with different network filtering stuff
+                      tags$br(),
+                      searchInput('wallet_search', label = "Wallet Search",
+                                  btnSearch = icon("search")),
                       tags$br(),
                       numericInput("min_holding", "Minimum ASA Holding", value = 200000, min = 0),
                       tags$br(),
                       actionButton("add_sus", "Add Suspicious Wallets to Blacklist"),
                       tags$br(),
                       tags$br(),
-                      # actionButton("update_networks", "Fetch most recent transactions"), #comment this out for the public version
-                      # tags$br(),
-                      # tags$br(),
+                      actionButton("update_networks", "Fetch most recent transactions"), #comment this out for the public version
+                      tags$br(),
+                      tags$br(),
                       downloadButton("download", "Download Current Blacklist"),
                       tags$br(),
                       tags$br(),
